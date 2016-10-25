@@ -1,0 +1,100 @@
+<p>Here's a step by step explanation how to install MySQL and JDBC and how to use it:</p>
+
+<ol>
+<li><p><strong><a href="http://dev.mysql.com/downloads/mysql/">Download</a> and install the MySQL server</strong>. Just do it the usual way. Remember the port number whenever you've changed it. It's by default <code>3306</code>.</p></li>
+<li><p><strong><a href="http://dev.mysql.com/downloads/connector/j/">Download</a> the JDBC driver and put in classpath</strong>, extract the ZIP file and put the containing JAR file in the classpath. The vendor-specific JDBC driver is a concrete implementation of the <a href="http://docs.oracle.com/javase/8/docs/api/java/sql/package-summary.html">JDBC API</a> (<a href="http://docs.oracle.com/javase/tutorial/jdbc/index.html">tutorial here</a>). </p>
+
+<p>If you're using an IDE like Eclipse or Netbeans, then you can add it to the classpath by adding the JAR file as <em>Library</em> to the <em>Build Path</em> in project's properties. </p>
+
+<p>If you're doing it "plain vanilla" in the command console, then you need to specify the path to the JAR file in the <code>-cp</code> or <code>-classpath</code> argument when executing your Java application.</p>
+
+<pre>java -cp .;/path/to/mysql-connector.jar com.example.YourClass</pre>
+
+<p>The <code>.</code> is just there to add the <em>current</em> directory to the classpath as well so that it can locate <code>com.example.YourClass</code> and the <code>;</code> is the classpath separator as it is in Windows. In Unix and clones <code>:</code> should be used.</p></li>
+<li><p><strong>Create a <a href="http://dev.mysql.com/doc/refman/5.7/en/create-database.html">database</a> in MySQL</strong>. Let's create a database <code>javabase</code>. You of course want World Domination, so let's use UTF-8 as well.</p>
+
+<pre><code>CREATE DATABASE javabase DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci;
+</code></pre></li>
+<li><p><strong><a href="http://dev.mysql.com/doc/refman/5.7/en/adding-users.html">Create an user</a> for Java and <a href="http://dev.mysql.com/doc/refman/5.7/en/grant.html">grant</a> it access</strong>. Simply because using <code>root</code> is a bad practice.</p>
+
+<pre><code>CREATE USER 'java'@'localhost' IDENTIFIED BY 'password';
+GRANT ALL ON javabase.* TO 'java'@'localhost' IDENTIFIED BY 'password';
+</code></pre>
+
+<p>Yes, <code>java</code> is the username and <code>password</code> is the password here.</p></li>
+<li><p><strong><a href="http://dev.mysql.com/doc/connector-j/en/connector-j-reference-configuration-properties.html">Determine</a> the JDBC URL</strong>. To connect the MySQL database using Java you need an JDBC URL in the following syntax:</p>
+
+<pre>jdbc:mysql://hostname:port/databasename</pre>
+
+<ul>
+<li><p><strong><code>hostname</code></strong>: The hostname where MySQL server is installed. If it's installed at the same machine where you run the Java code, then you can just use <code>localhost</code>. It can also be an IP address like <code>127.0.0.1</code>. If you encounter connectivity problems and using <code>127.0.0.1</code> instead of <code>localhost</code> solved it, then you've a problem in your network/DNS/hosts config.</p></li>
+<li><p><strong><code>port</code></strong>: The TCP/IP port where MySQL server listens on. This is by default <code>3306</code>.</p></li>
+<li><p><strong><code>databasename</code></strong>: The name of the database you'd like to connect to. That's <code>javabase</code>.</p></li>
+</ul>
+
+<p>So the final URL should look like:</p>
+
+<pre>jdbc:mysql://localhost:3306/javabase</pre></li>
+<li><p><strong><a href="http://dev.mysql.com/doc/connector-j/en/connector-j-usagenotes-basic.html">Test the connection</a> to MySQL using Java</strong>. Create a simple Java class with a <code>main()</code> method to test the connection. </p>
+
+<pre><code>String url = "jdbc:mysql://localhost:3306/javabase";
+String username = "java";
+String password = "password";
+
+System.out.println("Connecting database...");
+
+try (Connection connection = DriverManager.getConnection(url, username, password)) {
+    System.out.println("Database connected!");
+} catch (SQLException e) {
+    throw new IllegalStateException("Cannot connect the database!", e);
+}
+</code></pre>
+
+<p>If you get a <code>SQLException: No suitable driver</code>, then it means that either the JDBC driver wasn't autoloaded at all or that the JDBC URL is wrong (i.e. it wasn't recognized by any of the loaded drivers). Normally, a JDBC 4.0 driver should be autoloaded when you just drop it in runtime classpath. To exclude one and other, you can always manually load it as below:</p>
+
+<pre><code>System.out.println("Loading driver...");
+
+try {
+    Class.forName("com.mysql.jdbc.Driver");
+    System.out.println("Driver loaded!");
+} catch (ClassNotFoundException e) {
+    throw new IllegalStateException("Cannot find the driver in the classpath!", e);
+}
+</code></pre>
+
+<p>Note that the <code>newInstance()</code> call is <strong>not</strong> needed here. It's just to fix the old and buggy <code>org.gjt.mm.mysql.Driver</code>. <a href="http://stackoverflow.com/questions/2092659/what-is-difference-between-class-forname-and-class-forname-newinstance/2093236#2093236">Explanation here</a>. If this line throws <code>ClassNotFoundException</code>, then the JAR file containing the JDBC driver class is simply not been placed in the classpath.</p>
+
+<p>Note that you don't need to load the driver <strong>everytime</strong> <em>before</em> connecting. Just only once during application startup is enough.</p>
+
+<p>If you get a <code>SQLException: Connection refused</code> or <code>Connection timed out</code> or a MySQL specific <code>CommunicationsException: 
+Communications link failure</code>, then it means that the DB isn't reachable at all. This can have one or more of the following causes:</p>
+
+<ol>
+<li>IP address or hostname in JDBC URL is wrong.</li>
+<li>Hostname in JDBC URL is not recognized by local DNS server.</li>
+<li>Port number is missing or wrong in JDBC URL.</li>
+<li>DB server is down.</li>
+<li>DB server doesn't accept TCP/IP connections.</li>
+<li>DB server has run out of connections.</li>
+<li>Something in between Java and DB is blocking connections, e.g. a firewall or proxy.
+<br><br></li>
+</ol>
+
+<p>To solve the one or the other, follow the following advices:</p>
+
+<ol>
+<li>Verify and test them with <code>ping</code>.</li>
+<li>Refresh DNS or use IP address in JDBC URL instead.</li>
+<li>Verify it based on <code>my.cnf</code> of MySQL DB.</li>
+<li>Start the DB.</li>
+<li>Verify if mysqld is started without the <code>--skip-networking option</code>.</li>
+<li>Restart the DB and fix your code accordingly that it closes connections in <code>finally</code>.</li>
+<li>Disable firewall and/or configure firewall/proxy to allow/forward the port.
+<br><br></li>
+</ol>
+
+<p>Note that closing the <code>Connection</code> is <strong>extremely</strong> important. If you don't close connections and keep getting a lot of them in a short time, then the database may run out of connections and your application may break. Always acquire the <code>Connection</code> in a <a href="https://docs.oracle.com/javase/tutorial/essential/exceptions/tryResourceClose.html"><code>try-with-resources</code> statement</a>. Or if you're not on Java 7 yet, explicitly close it in <code>finally</code> of a <code>try-finally</code> block. Closing in <code>finally</code> is just to ensure that it get closed as well in case of an exception. This also applies to <code>Statement</code>, <code>PreparedStatement</code> and <code>ResultSet</code>.</p></li>
+</ol>
+
+<p>That was it as far the connectivity concerns. You can find <a href="http://balusc.blogspot.com/2008/07/dao-tutorial-data-layer.html">here</a> a more advanced tutorial how to load and store fullworthy Java model objects in a database with help of a basic DAO class.</p>
+    </div>
